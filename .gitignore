@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.egg-info
+.eggs/
+build
+
+# IDE Stuff
+.vscode/
+**code-workspace
+.idea
+
+# Scratch
+**/sandbox/
