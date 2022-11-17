@@ -44,9 +44,9 @@ class PyTessent:
 
         return str_result
 
-    def close(self):
+    def close(self, force: bool = True):
         """close tessent shell process"""
-        self.process.close()
+        self.process.close(force=force)
 
 
 class PyTessentFactory:
@@ -76,7 +76,7 @@ class PyTessentFactory:
             arguments (dict, optional): arguments passed to tessent -shell using "-arguments" option
                 Defaults to None (no arguments).
             timeout (int, optional): timeout limit for process.expect() calls of created PyTessent object
-                Defaults to 120.
+                Defaults to 10000.
 
         Returns:
             PyTessent: object for interacting with tessent -shell process
