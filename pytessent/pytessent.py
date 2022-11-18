@@ -3,9 +3,7 @@ import pexpect
 
 
 class PyTessent:
-    def __init__(
-        self, process: pexpect.pty_spawn.spawn, expect_list: list, timeout: int
-    ):
+    def __init__(self, process: pexpect.pty_spawn.spawn, expect_list: list, timeout: int):
         self.process = process
         self.expect_list = expect_list
         self.timeout = timeout
@@ -32,9 +30,7 @@ class PyTessent:
         str_result = byte_result.decode("utf-8")
 
         str_result = str_result.replace("\r", "")  # remove \r (leave \n)
-        str_result = re.sub(
-            r".\x08", "", str_result
-        )  # remove weird backspace characters...
+        str_result = re.sub(r".\x08", "", str_result)  # remove weird backspace characters...
 
         # remove command from return string...
         if not str_result.find(f"{command}\n") == 0:
@@ -46,6 +42,12 @@ class PyTessent:
 
     def close(self, force: bool = True):
         """close tessent shell process"""
+
+        try:  # exit Tessent shell
+            self.sendCommand("exit -force")
+        except pexpect.exceptions.EOF:  # pexpect will throw exception, but we want to ignore it
+            pass
+
         self.process.close(force=force)
 
 
@@ -97,9 +99,7 @@ class PyTessentFactory:
         command = " ".join(command_list)  # construct command
         child = pexpect.spawn(command)  # create process
         child.expect(self.expect_list, timeout=timeout)  # wait for it to be ready for commands
-        tessent_process = PyTessent(
-            child, expect_list=self.expect_list, timeout=timeout
-        )  # create PyTessent object
+        tessent_process = PyTessent(child, expect_list=self.expect_list, timeout=timeout)  # create PyTessent object
 
         self.pytessents.append(tessent_process)  # track open processes
 
