@@ -33,10 +33,10 @@ class PyTessent:
         str_result = re.sub(r".\x08", "", str_result)  # remove weird backspace characters...
 
         # remove command from return string...
-        if not str_result.find(f"{command}\n") == 0:
+        if command not in str_result:
             raise Exception(f"Command not found in before string... ({str_result})")
 
-        str_result = str_result.replace(f"{command}\n", "", 1).rstrip()
+        str_result = str_result.split(f"{command}\n", 1)[1].rstrip()
 
         return str_result
 
