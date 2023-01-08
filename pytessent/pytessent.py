@@ -1,14 +1,21 @@
 import re
 import pexpect
 
+from typing import Optional
+
 
 class PyTessent:
-    def __init__(self, process: pexpect.pty_spawn.spawn, expect_list: list, timeout: int):
+    def __init__(
+        self,
+        process: pexpect.pty_spawn.spawn,
+        expect_list: list,
+        timeout: Optional[int],
+    ):
         self.process = process
         self.expect_list = expect_list
         self.timeout = timeout
 
-    def sendCommand(self, command: str, timeout: int = None) -> str:
+    def sendCommand(self, command: str, timeout: Optional[int] = None) -> str:
         """send command to active tessent shell process, get back resulting message
 
         Args:
@@ -30,7 +37,9 @@ class PyTessent:
         str_result = byte_result.decode("utf-8")
 
         str_result = str_result.replace("\r", "")  # remove \r (leave \n)
-        str_result = re.sub(r".\x08", "", str_result)  # remove weird backspace characters...
+        str_result = re.sub(
+            r".\x08", "", str_result
+        )  # remove weird backspace characters...
 
         # remove command from return string...
         if command not in str_result:
@@ -60,11 +69,11 @@ class PyTessentFactory:
 
     def launch(
         self,
-        dofile: str = None,
-        logfile: str = None,
+        dofile: Optional[str] = None,
+        logfile: Optional[str] = None,
         replace: bool = False,
-        arguments: dict = None,
-        timeout: int = 10000,
+        arguments: Optional[dict] = None,
+        timeout: Optional[int] = None,
     ) -> PyTessent:
         """launch a tessent shell process using given options, returning corresponding PyTessent object
 
@@ -78,7 +87,7 @@ class PyTessentFactory:
             arguments (dict, optional): arguments passed to tessent -shell using "-arguments" option
                 Defaults to None (no arguments).
             timeout (int, optional): timeout limit for process.expect() calls of created PyTessent object
-                Defaults to 10000.
+                Defaults to None for no timeout.
 
         Returns:
             PyTessent: object for interacting with tessent -shell process
@@ -98,8 +107,12 @@ class PyTessentFactory:
 
         command = " ".join(command_list)  # construct command
         child = pexpect.spawn(command)  # create process
-        child.expect(self.expect_list, timeout=timeout)  # wait for it to be ready for commands
-        tessent_process = PyTessent(child, expect_list=self.expect_list, timeout=timeout)  # create PyTessent object
+        child.expect(
+            self.expect_list, timeout=timeout
+        )  # wait for it to be ready for commands
+        tessent_process = PyTessent(
+            child, expect_list=self.expect_list, timeout=timeout
+        )  # create PyTessent object
 
         self.pytessents.append(tessent_process)  # track open processes
 
