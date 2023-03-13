@@ -1,5 +1,7 @@
 import re
 import pexpect
+from pathlib import Path
+from typing import Union
 
 from typing import Optional
 
@@ -28,26 +30,21 @@ class PyTessent:
             str: resulting message printed to shell after running command
         """
 
-        self.process.sendline(command)  # send command
-        if not timeout:  # overwrite timeout if specified for specific command
-            timeout = self.timeout
-        self.process.expect(self.expect_list, timeout=timeout)  # wait for it to finish
+        self.process.sendline(command)
+        self.process.expect(
+            self.expect_list, timeout=timeout if timeout else self.timeout
+        )
 
-        byte_result = self.process.before  # pull result
-        str_result = byte_result.decode("utf-8")
+        # remove \r (leave \n)
+        result = self.process.before.decode("utf-8").replace("\r", "")
+        # remove weird backspace characters
+        result = re.sub(r".\x08", "", result)
 
-        str_result = str_result.replace("\r", "")  # remove \r (leave \n)
-        str_result = re.sub(
-            r".\x08", "", str_result
-        )  # remove weird backspace characters...
+        # remove echoed command
+        if command not in result:
+            raise Exception(f"Command not found in result '{result}'")
 
-        # remove command from return string...
-        if command not in str_result:
-            raise Exception(f"Command not found in before string... ({str_result})")
-
-        str_result = str_result.split(f"{command}\n", 1)[1].rstrip()
-
-        return str_result
+        return result.split(f"{command}\n", 1)[1].rstrip()
 
     def close(self, force: bool = True):
         """close tessent shell process"""
@@ -63,14 +60,14 @@ class PyTessent:
 class PyTessentFactory:
     def __init__(self, expect_list: list = ["SETUP> ", "ANALYSIS> "]) -> None:
         self.expect_list = expect_list
-        self.pytessents = []
+        self.open_procs = []
 
         return None
 
     def launch(
         self,
-        dofile: Optional[str] = None,
-        logfile: Optional[str] = None,
+        dofile: Optional[Union[str, Path]] = None,
+        logfile: Optional[Union[str, Path]] = None,
         replace: bool = False,
         arguments: Optional[dict] = None,
         timeout: Optional[int] = None,
@@ -78,9 +75,9 @@ class PyTessentFactory:
         """launch a tessent shell process using given options, returning corresponding PyTessent object
 
         Args:
-            dofile (str, optional): path to TCL dofile to be used tessent -shell run
+            dofile (str or pathlib.Path, optional): path to TCL dofile to be used tessent -shell run
                 Defaults to None (no dofile used, just launch tessent -shell).
-            logfile (str, optional): path to logfile for tessent -shell run
+            logfile (str or pathlib.Path, optional): path to logfile for tessent -shell run
                 Defaults to None (do not create logfile).
             replace (bool, optional): should we include a "-replace" option, replacing logfile if it exists?
                 Defaults to False (no replace flag).
@@ -94,26 +91,20 @@ class PyTessentFactory:
         """
 
         command_list = ["tessent -shell"]
-        if dofile:  # dofile path
+        if dofile:
             command_list.append(f"-dofile {dofile}")
-        if logfile:  # logfile path
+        if logfile:
             command_list.append(f"-logfile {logfile}")
-        if replace:  # replace flag
+        if replace:
             command_list.append("-replace")
-        if arguments:  # handle input arguments
+        if arguments:
             command_list.append("-arguments")
             for k, v in arguments.items():
                 command_list.append(f"{k}={v}")
 
-        command = " ".join(command_list)  # construct command
-        child = pexpect.spawn(command)  # create process
-        child.expect(
-            self.expect_list, timeout=timeout
-        )  # wait for it to be ready for commands
-        tessent_process = PyTessent(
-            child, expect_list=self.expect_list, timeout=timeout
-        )  # create PyTessent object
+        child = pexpect.spawn(" ".join(command_list))
+        child.expect(self.expect_list, timeout=timeout)
+        tessent_proc = PyTessent(child, expect_list=self.expect_list, timeout=timeout)
+        self.open_procs.append(tessent_proc)
 
-        self.pytessents.append(tessent_process)  # track open processes
-
-        return tessent_process
+        return tessent_proc
