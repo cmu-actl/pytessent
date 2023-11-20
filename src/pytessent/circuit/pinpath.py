@@ -23,7 +23,7 @@ class PinPath:
     """
 
     def __repr__(self) -> str:
-        return f"Path({'->'.join([p.name for p in self.pins])}"
+        return f"PinPath({'->'.join([p.name for p in self.pins])})"
 
     def __init__(self, pins: list[Pin], index: int = None) -> None:
         self._pins: list[Pin] = pins

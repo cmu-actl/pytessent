@@ -1,3 +1,59 @@
+[project]
+name = "pytessent"
+version = "0.3.0"
+authors = [
+    { name = "Ruben Purdy", email = "rpurdy@andrew.cmu.edu" },
+    { name = "Chris Nigh", email = "christon@andrew.cmu.edu" },
+]
+dependencies = [
+    "pexpect>=4.8.0",
+    "tqdm",
+    "typer",
+]
+description = "A simple Python-based wrapper for Siemens Tessent, with extensions to automate common tasks"
+readme = "README.md"
+classifiers = ["Programming Language :: Python :: 3"]
+
+[project.urls]
+"Homepage" = "https://github.com/cmu-actl/pytessent"
+
+[project.optional-dependencies]
+dev = ["flake8", "black", "mypy", "pre-commit"]
+test = ["tox"]
+
+[tool.docformatter]
+recursive = true
+blank = false
+wrap-summaries = 88
+wrap-descriptions = 88
+
+[tool.pydocstyle]
+ignore = [
+    "D100",
+    "D101",
+    "D102",
+    "D103",
+    "D104",
+    "D105",
+    "D106",
+    "D107",
+    "D203",
+    "D204",
+    "D213",
+    "D215",
+    "D400",
+    "D401",
+    "D404",
+    "D406",
+    "D407",
+    "D408",
+    "D409",
+    "D413",
+]
+
+[tool.isort]
+profile = "black"
+
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools>=64.0"]
 build-backend = "setuptools.build_meta"

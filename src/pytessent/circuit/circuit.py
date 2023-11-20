@@ -275,9 +275,12 @@ class Circuit:
 
         return G
 
-    def plot_graph(self, outfile: Path = None) -> None:
+    def plot_graph(self, outfile: Path = None, pattern: Pattern = None) -> None:
         if not outfile:
-            outfile = Path(f"{self.name}_graph.png")
+            if pattern:
+                outfile = Path(f"{self.name}_pattern{pattern.index}_graph.png")
+            else:
+                outfile = Path(f"{self.name}_graph.png")
 
         G = self.gate_graph
 
