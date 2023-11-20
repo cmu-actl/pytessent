@@ -1,32 +1,54 @@
 from __future__ import annotations
 
 import re
-import pexpect
 from pathlib import Path
-from typing import Union
+from shutil import which
 
-from typing import Optional
+import pexpect  # type: ignore
 
 
 class PyTessent:
+    """Class for interacting with Tessent shell process."""
+
     _defaultexpectlist: list[str] = ["SETUP> ", "ANALYSIS> "]
+    _defaulttessent: str = "tessent_2023_3"
     _pytessents: list[PyTessent] = []
 
     def __init__(
         self,
         process: pexpect.pty_spawn.spawn,
-        expectlist: list,
-        timeout: Optional[int],
+        tessentpath: Path,
+        expectlist: list[str],
+        timeout: int | None,
     ):
         self._process = process
+        self._tessentpath = tessentpath
         self._expectlist = expectlist
         self._timeout = timeout
-
 
     @property
     def process(self) -> pexpect.pty_spawn.spawn:
         """PyTessent process."""
         return self._process
+
+    @property
+    def tessentpath(self) -> Path:
+        """Path to the Tessent executable used by PyTessent."""
+        return self._tessentpath
+
+    @property
+    def expectlist(self) -> list[str]:
+        """List of strings to expect from the Tessent shell."""
+        return self._expectlist
+
+    @property
+    def timeout(self) -> int | None:
+        """Timeout limit for process.expect() calls."""
+        return self._timeout
+
+    @timeout.setter
+    def timeout(self, timeout: int | None) -> None:
+        self._timeout = timeout
 
     @classmethod
     def launch(
@@ -36,7 +58,9 @@ class PyTessent:
         replace: bool = False,
         arguments: dict[str, str] | None = None,
         timeout: int | None = None,
-        expectlist: list[str] | None = None
+        tessentpath: Path | None = None,
+        tessentversion: str | None = None,
+        expectlist: list[str] | None = None,
     ) -> PyTessent:
         """launch a tessent shell process using given options, returning corresponding PyTessent object
 
@@ -49,14 +73,46 @@ class PyTessent:
                 Defaults to False (no replace flag).
             arguments (dict, optional): arguments passed to tessent -shell using "-arguments" option
                 Defaults to None (no arguments).
+            tessentpath (str or pathlib.Path, optional): path to tessent executable
+                Defaults to None (use "tessent" from PATH).
+            tessentversion (str, optional): version of tessent executable
+                Defaults to None (use version from tessent executable).
             timeout (int, optional): timeout limit for process.expect() calls of created PyTessent object
                 Defaults to None for no timeout.
 
         Returns:
             PyTessent: object for interacting with tessent -shell process
+
+        Notes:
+            - if tessentpath is defined, use that directly
+            - if tessentpath is None and tessentversion is defined, use version to find tessent executable at "/afs/ece.cmu.edu/support/mgc/mgc.release/{tessentversion}/bin/tessent"
+            - if tessentpath is None and tessentversion is None, use from PATH
+            - if tessentpath is None, tessentversion is None, and tessent not in PATH, use default tessentversion
+            - if expectlist is None, will use default expectlist
         """
 
-        command_list = ["tessent -shell"]
+        if not tessentversion and not tessentpath:
+            if which("tessent"):  # if tessent in PATH, use it
+                tessentpath = Path("tessent")
+            else:
+                if not tessentversion:
+                    tessentversion = cls._defaulttessent
+                if not tessentpath:
+                    tessentpath = Path(
+                        f"/afs/ece.cmu.edu/support/mgc/mgc.release/{tessentversion}/bin/tessent"
+                    )
+
+        if not tessentpath or (
+            tessentpath != Path("tessent") and not tessentpath.exists()
+        ):
+            raise FileNotFoundError(
+                f"Could not find Tessent executable path at {tessentpath}"
+            )
+
+        if not expectlist:
+            expectlist = cls._defaultexpectlist
+
+        command_list = [tessentpath, "-shell"]
         if dofile:
             command_list.append(f"-dofile {dofile}")
         if logfile:
@@ -68,12 +124,19 @@ class PyTessent:
             for k, v in arguments.items():
                 command_list.append(f"{k}={v}")
 
-        child = pexpect.spawn(" ".join(command_list))
-        child.expect(cls.expect_list, timeout=timeout)
-        tessent_proc = PyTessent(child, expect_list=cls.expect_list, timeout=timeout)
-        cls._pytessents.append(tessent_proc)
+        command_str = " ".join([str(c) for c in command_list])
+        child = pexpect.spawn(command_str)
+        child.expect(expectlist, timeout=timeout)
+        pt = PyTessent(
+            process=child,
+            tessentpath=tessentpath,
+            expectlist=expectlist,
+            timeout=timeout,
+        )
 
-        return tessent_proc
+        cls._pytessents.append(pt)
+
+        return pt
 
     def closeall(cls) -> None:
         """Close all PyTessent Processes."""
@@ -114,7 +177,11 @@ class PyTessent:
 
         try:  # exit Tessent shell
             self.sendCommand("exit -force")
-        except pexpect.exceptions.EOF:  # pexpect will throw exception, but we want to ignore it
+        except (
+            pexpect.exceptions.EOF
+        ):  # pexpect will throw exception, but we want to ignore it
             pass
 
         self.process.close(force=force)
+
+        PyTessent._pytessents.remove(self)

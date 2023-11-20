@@ -1,6 +1,4 @@
+__all__ = ["PyTessent", "circuit"]
 
-
-__all__ = ["PyTessent", "PyTessentFactory", "circuit"]
-
-from . import circuit
-from .pytessent import PyTessentFactory, PyTessent
+from pytessent.pytessent import PyTessent
+from pytessent import circuit

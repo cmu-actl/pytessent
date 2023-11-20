@@ -39,7 +39,7 @@ class Pin:
         Get pin object from name of pin.
     """
 
-    _pins = {}
+    _pins: dict[str, Pin] = {}
 
     @classmethod
     def get_pin(cls, name: str, pt: PyTessent) -> Pin:
@@ -116,12 +116,12 @@ class Pin:
         """Get Gate object that pin is on."""
         return self._gate
 
-    def get_pin_value(self) -> tuple(Literal["0", "1", "X"]):
+    def get_pin_value(self) -> tuple[Literal["0", "1", "X"]]:
         """From a given pin name, find its value for the current gate report.
 
         Returns
         -------
-        tuple(Literal["0", "1", "X"])
+        tupl[Literal["0", "1", "X"]]
             Tuple of values found in gate report string.
 
         Raises
