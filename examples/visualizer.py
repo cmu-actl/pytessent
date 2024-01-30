@@ -1,9 +1,8 @@
 from pathlib import Path
-from pytessent import PyTessentFactory, PyTessent
+from pytessent import PyTessent
 
 
-ptf = PyTessentFactory()
-pt = ptf.launch(timeout=None, replace=True, logfile="tessent_visualizer.log")
+pt = PyTessent.launch(timeout=None, replace=True, logfile="tessent_visualizer.log")
 
 
 flatmodel = Path(
