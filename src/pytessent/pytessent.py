@@ -117,7 +117,7 @@ class PyTessent:
             command_list.append(f"-dofile {dofile}")
         if logfile:
             command_list.append(f"-logfile {logfile}")
-        if replace:
+        if logfile and replace:
             command_list.append("-replace")
         if arguments:
             command_list.append("-arguments")
