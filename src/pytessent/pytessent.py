@@ -185,3 +185,6 @@ class PyTessent:
         self.process.close(force=force)
 
         PyTessent._pytessents.remove(self)
+
+    def __exit__(self) -> None:
+        self.close()
