@@ -11,7 +11,6 @@ class PyTessent:
     """Class for interacting with Tessent shell process."""
 
     _defaultexpectlist: list[str] = ["SETUP> ", "ANALYSIS> "]
-    _defaulttessent: str = "tessent_2023_3"
     _pytessents: list[PyTessent] = []
 
     def __init__(
@@ -59,7 +58,6 @@ class PyTessent:
         arguments: dict[str, str] | None = None,
         timeout: int | None = None,
         tessentpath: Path | None = None,
-        tessentversion: str | None = None,
         expectlist: list[str] | None = None,
     ) -> PyTessent:
         """launch a tessent shell process using given options, returning corresponding PyTessent object
@@ -75,8 +73,6 @@ class PyTessent:
                 Defaults to None (no arguments).
             tessentpath (str or pathlib.Path, optional): path to tessent executable
                 Defaults to None (use "tessent" from PATH).
-            tessentversion (str, optional): version of tessent executable
-                Defaults to None (use version from tessent executable).
             timeout (int, optional): timeout limit for process.expect() calls of created PyTessent object
                 Defaults to None for no timeout.
 
@@ -85,22 +81,13 @@ class PyTessent:
 
         Notes:
             - if tessentpath is defined, use that directly
-            - if tessentpath is None and tessentversion is defined, use version to find tessent executable at "/afs/ece.cmu.edu/support/mgc/mgc.release/{tessentversion}/bin/tessent"
-            - if tessentpath is None and tessentversion is None, use from PATH
-            - if tessentpath is None, tessentversion is None, and tessent not in PATH, use default tessentversion
+            - if tessentpath is None, use from $PATH
             - if expectlist is None, will use default expectlist
         """
 
-        if not tessentversion and not tessentpath:
+        if not tessentpath:
             if which("tessent"):  # if tessent in PATH, use it
                 tessentpath = Path("tessent")
-            else:
-                if not tessentversion:
-                    tessentversion = cls._defaulttessent
-                if not tessentpath:
-                    tessentpath = Path(
-                        f"/afs/ece.cmu.edu/support/mgc/mgc.release/{tessentversion}/bin/tessent"
-                    )
 
         if not tessentpath or (
             tessentpath != Path("tessent") and not tessentpath.exists()
@@ -185,3 +172,6 @@ class PyTessent:
         self.process.close(force=force)
 
         PyTessent._pytessents.remove(self)
+
+    def __exit__(self):
+        self.close()
