@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Literal, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .circuit import Circuit
-    from .pin import Pin
-    from .pinpath import PinPath
+    from pytessent.circuit.circuit import Circuit
+    from pytessent.circuit.pin import Pin
+    from pytessent.circuit.pinpath import PinPath
 
 
 class Pattern:
@@ -33,7 +33,7 @@ class Pattern:
 
     def __init__(self, index: int) -> None:
         self._index = index
-        self._pinvalues: dict[Pin, tuple(Literal["0", "1", "X"])] = {}
+        self._pinvalues: dict[Pin, tuple[Literal["0", "1", "X"], ...]] = {}
         self._simcontext = f"pattern_{self.index}"
         self._activatedpinpaths: list[PinPath] = []
 
@@ -43,8 +43,8 @@ class Pattern:
         return self._index
 
     @property
-    def pinvalues(self) -> dict[Pin, tuple(Literal["0", "1", "X"])]:
-        """Get pin values dictionary"""
+    def pinvalues(self) -> dict[Pin, tuple[Literal["0", "1", "X"], ...]]:
+        """Get pin values dictionary."""
         return self._pinvalues
 
     @property
@@ -65,7 +65,7 @@ class Pattern:
         c : Circuit
             Circuit with pins to check
         """
-        c.pt.sendCommand(f"set_gate_report pattern_index {self.index} -external")
+        c.pt.send_command(f"set_gate_report pattern_index {self.index} -external")
         for pin in c.pins:
             if pin not in self._pinvalues:
                 self._pinvalues[pin] = pin.get_pin_value()
@@ -84,17 +84,21 @@ class Pattern:
         self.get_circuit_values(c)
 
         # create a new simulation context, using "stable_capture" context as template
-        c.pt.sendCommand(f"add_simulation_context {self.simcontext} -copy_from stable_capture")
-        c.pt.sendCommand(f"set_current_simulation_context {self.simcontext}")
+        c.pt.send_command(
+            f"add_simulation_context {self.simcontext} -copy_from stable_capture"
+        )
+        c.pt.send_command(f"set_current_simulation_context {self.simcontext}")
 
         # simulate the values on the circuit pins for the pattern
         for pin in c.inputs:
-            c.pt.sendCommand(f"add_simulation_forces {{{pin.name}}} -value {self.pinvalues[pin][v]}")
+            c.pt.send_command(
+                f"add_simulation_forces {{{pin.name}}} -value {self.pinvalues[pin][v]}"
+            )
 
-        c.pt.sendCommand("simulate_forces")
+        c.pt.send_command("simulate_forces")
 
-    def simulate_x_at_pin(self, c: Circuit, pin: Pin, v: int = -1) -> tuple(Pin, set[Pin], set[Pin]):
-        """Simulate an X on a circuit pin, see where it propagates
+    def simulate_x_at_pin(self, c: Circuit, pin: Pin, v: int = -1):
+        """Simulate an X on a circuit pin, see where it propagates.
 
         Parameters
         ----------
@@ -105,13 +109,15 @@ class Pattern:
         """
 
         # add an x on defined pin and simulate
-        c.pt.sendCommand(f"add_simulation_forces {{{pin.name}}} -value X")
-        c.pt.sendCommand("simulate_forces")
+        c.pt.send_command(f"add_simulation_forces {{{pin.name}}} -value X")
+        c.pt.send_command("simulate_forces")
 
         # get the values of all pins in circuit
         sim_results = {}
         for p in c.pins:
-            sim_results[p] = c.pt.sendCommand(f"get_simulation_value_list {{{p.name}}}")
+            sim_results[p] = c.pt.send_command(
+                f"get_simulation_value_list {{{p.name}}}"
+            )
 
         # get results of x simulation: what pins get an x, does any output have a pin
         res = (
@@ -120,7 +126,9 @@ class Pattern:
         )
 
         # revert pin value to original in simulation context
-        c.pt.sendCommand(f"add_simulation_forces {{{pin.name}}} -value {self.pinvalues[pin][v]}")
+        c.pt.send_command(
+            f"add_simulation_forces {{{pin.name}}} -value {self.pinvalues[pin][v]}"
+        )
 
         return res
 

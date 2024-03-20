@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .pin import Pin
+    from pytessent.circuit.pin import Pin
 
 
 class PinPath:
@@ -25,9 +25,9 @@ class PinPath:
     def __repr__(self) -> str:
         return f"PinPath({'->'.join([p.name for p in self.pins])})"
 
-    def __init__(self, pins: list[Pin], index: int = None) -> None:
+    def __init__(self, pins: list[Pin], index: int | None = None) -> None:
         self._pins: list[Pin] = pins
-        self._index: int = index
+        self._index: int | None = index
 
     @property
     def pins(self) -> list[Pin]:
@@ -35,11 +35,12 @@ class PinPath:
 
     @property
     def index(self) -> int:
+        if self._index is None:
+            raise ValueError("Index has not been set")
         return self._index
 
     def is_activated(self, x_pins: set[Pin]) -> bool:
         return set(self.pins) <= x_pins
-
 
     def get_pdf_string(self) -> str:
         """Get string for Tessent PDF fault definition for path.

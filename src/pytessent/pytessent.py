@@ -7,214 +7,131 @@ from shutil import which
 import pexpect  # type: ignore
 
 
-class PyTessent:
-    """Class for interacting with Tessent shell process."""
+class TessentCommandError(Exception):
+    pass
 
-    _defaultexpectlist: list[str] = ["SETUP> ", "ANALYSIS> "]
-    _pytessents: list[PyTessent] = []
+
+class PyTessent:
+    """Class for interacting with a Tessent shell process."""
+
+    _default_expect_patterns: list[str] = ["SETUP> ", "ANALYSIS> "]
 
     def __init__(
         self,
-        process: pexpect.pty_spawn.spawn,
-        tessentpath: Path,
-        expectlist: list[str],
-        timeout: int | None,
-    ):
-        self._process = process
-        self._tessentpath = tessentpath
-        self._expectlist = expectlist
-        self._timeout = timeout
-        self._flat_model: Path | None = None
-        self._pattern_files: list[Path] = []
-
-    @property
-    def process(self) -> pexpect.pty_spawn.spawn:
-        """PyTessent process."""
-        return self._process
-
-    @property
-    def tessentpath(self) -> Path:
-        """Path to the Tessent executable used by PyTessent."""
-        return self._tessentpath
-
-    @property
-    def expectlist(self) -> list[str]:
-        """List of strings to expect from the Tessent shell."""
-        return self._expectlist
-
-    @property
-    def timeout(self) -> int | None:
-        """Timeout limit for process.expect() calls."""
-        return self._timeout
-
-    @timeout.setter
-    def timeout(self, timeout: int | None) -> None:
-        self._timeout = timeout
-
-    @property
-    def flat_model(self) -> Path | None:
-        return self._flat_model
-
-    @property
-    def pattern_files(self) -> list[Path]:
-        return self._pattern_files
-
-    @classmethod
-    def launch(
-        cls,
-        dofile: Path | str | None = None,
-        logfile: Path | str | None = None,
+        do_file: Path | str | None = None,
+        log_file: Path | str | None = None,
         replace: bool = False,
         arguments: dict[str, str] | None = None,
         timeout: int | None = None,
-        tessentpath: Path | None = None,
-        expectlist: list[str] | None = None,
-    ) -> PyTessent:
-        """launch a tessent shell process using given options, returning corresponding PyTessent object
+        tessent_exe: Path | str | None = None,
+        expect_patterns: list[str] | None = None,
+    ) -> None:
+        """Launch a new tessent shell process using given options.
+
+        Can also be used as a context manager to automatically close the Tessent process
+        on exit.
 
         Args:
-            dofile (str or pathlib.Path, optional): path to TCL dofile to be used tessent -shell run
-                Defaults to None (no dofile used, just launch tessent -shell).
-            logfile (str or pathlib.Path, optional): path to logfile for tessent -shell run
-                Defaults to None (do not create logfile).
-            replace (bool, optional): should we include a "-replace" option, replacing logfile if it exists?
-                Defaults to False (no replace flag).
-            arguments (dict, optional): arguments passed to tessent -shell using "-arguments" option
-                Defaults to None (no arguments).
-            tessentpath (str or pathlib.Path, optional): path to tessent executable
-                Defaults to None (use "tessent" from PATH).
-            timeout (int, optional): timeout limit for process.expect() calls of created PyTessent object
-                Defaults to None for no timeout.
-
-        Returns:
-            PyTessent: object for interacting with tessent -shell process
-
-        Notes:
-            - if tessentpath is defined, use that directly
-            - if tessentpath is None, use from $PATH
-            - if expectlist is None, will use default expectlist
+            do_file: path to TCL script to run in Tessent.
+            log_file: path to save Tessent log file to.
+            replace: replace existing log file if it already exists.
+            arguments: arguments passed to Tessent -shell using "-arguments" option.
+            timeout: timeout limit for each Tessent command. If `None`, no timeout.
+            tessent_exe: tessent executable to launch Tessent from. If `None`, queried
+                from the $PATH variable.
+            expect_patterns: patterns to expect from Tessent indicating it is ready for
+                input. If `None`, checks for "SETUP> " and "ANALYSIS> ".
         """
+        self.timeout = timeout
 
-        if not tessentpath:
-            if which("tessent"):  # if tessent in PATH, use it
-                tessentpath = Path("tessent")
-
-        if not tessentpath or (
-            tessentpath != Path("tessent") and not tessentpath.exists()
-        ):
+        if not tessent_exe:
+            # Check for tessent exe on $PATH
+            if not which("tessent"):
+                raise FileNotFoundError("Could not find 'tessent' executable in path")
+            tessent_exe = "tessent"
+        elif str(tessent_exe) != "tessent" and not Path(tessent_exe).exists():
             raise FileNotFoundError(
-                f"Could not find Tessent executable path at {tessentpath}"
+                f"Could not find Tessent executable at '{tessent_exe}'"
             )
+        self._tessent_exe = str(tessent_exe)
 
-        if not expectlist:
-            expectlist = cls._defaultexpectlist
+        if not expect_patterns:
+            self._expect_patterns = self._default_expect_patterns
+        else:
+            self._expect_patterns = expect_patterns
 
-        command_list = [tessentpath, "-shell"]
-        if dofile:
-            command_list.append(f"-dofile {dofile}")
-        if logfile:
-            command_list.append(f"-logfile {logfile}")
-        if logfile and replace:
-            command_list.append("-replace")
+        launch_command_parts = [tessent_exe, "-shell"]
+        if do_file:
+            launch_command_parts.append(f"-dofile {do_file}")
+        if log_file:
+            launch_command_parts.append(f"-logfile {log_file}")
+            if replace:
+                launch_command_parts.append("-replace")
         if arguments:
-            command_list.append("-arguments")
+            launch_command_parts.append("-arguments")
             for k, v in arguments.items():
-                command_list.append(f"{k}={v}")
+                launch_command_parts.append(f"{k}={v}")
 
-        command_str = " ".join([str(c) for c in command_list])
-        child = pexpect.spawn(command_str)
-        child.expect(expectlist, timeout=timeout)
-        pt = PyTessent(
-            process=child,
-            tessentpath=tessentpath,
-            expectlist=expectlist,
-            timeout=timeout,
-        )
+        self._process = pexpect.spawn(" ".join(launch_command_parts))
+        self._process.expect(self._expect_patterns, timeout=self.timeout)  # type: ignore
 
-        cls._pytessents.append(pt)
+    @property
+    def process(self) -> pexpect.pty_spawn.spawn:
+        """The Tessent process."""
+        return self._process
 
-        return pt
+    @property
+    def tessent_exe(self) -> str:
+        """The Tessent executable used by PyTessent."""
+        return self._tessent_exe
 
-    def closeall(cls) -> None:
-        """Close all PyTessent Processes."""
-        while cls._pytessents:
-            cls._pytessents.pop().close()
+    @property
+    def expect_patterns(self) -> list[str]:
+        """Patterns expected from the Tessent shell."""
+        return self._expect_patterns
 
-    def sendCommand(self, command: str, timeout: int | None = None) -> str:
-        """send command to active tessent shell process, get back resulting message
+    def send_command(self, command: str, timeout: int | None = None) -> str:
+        """Send a command to tessent and get back the resulting message.
 
         Args:
-            command (str): command to send to active tessent shell
+            command: command to send to active tessent shell.
 
         Raises:
-            Exception: raised if command not found in string returned by self.process.before
+            TessentCommandError: raised if the command was not found echoed in the
+                resulting output.
 
         Returns:
-            str: resulting message printed to shell after running command
+            resulting message printed to shell after running command.
         """
-
-        if "read_flat_model" in command:
-            print(
-                (
-                    "WARNING: Use dedicated PyTessent read_flat_model method to maintain flat_model "
-                    "attribute state"
-                )
-            )
-
-        if "read_pattern" in command:
-            print(
-                (
-                    "WARNING: Use dedicated PyTessent read_pattern_file method to maintain pattern_file "
-                    "attribute state"
-                )
-            )
-            self.pattern_files = []
-
         self.process.sendline(command)
         self.process.expect(
-            self.expectlist, timeout=timeout if timeout else self.timeout
+            self.expect_patterns,  # type: ignore
+            timeout=timeout if timeout else self.timeout,
         )
 
         # remove \r (leave \n)
-        result = self.process.before.decode("utf-8").replace("\r", "")
+        result = self.process.before.decode("utf-8").replace("\r", "")  # type: ignore
         # remove weird backspace characters
         result = re.sub(r".\x08", "", result)
 
         # remove echoed command
         if command not in result:
-            raise Exception(f"Command not found in result '{result}'")
+            raise TessentCommandError(f"Command not found in result '{result}'")
 
         return result.split(f"{command}\n", 1)[1].rstrip()
 
-    def read_flat_model(self, flat_model: Path | str) -> None:
-        flat_model = Path(flat_model)
-        if (not self.flat_model) or (self.flat_model != flat_model):
-            self.sendCommand(f"read_flat_model {flat_model}")
-            self._flat_model = flat_model
-
-    def read_pattern_files(self, pattern_files: list[Path]) -> None:
-        pattern_files = [Path(p) for p in pattern_files]
-        if (not self.pattern_files) or (self.pattern_files != pattern_files):
-            self.sendCommand("delete_patterns")
-            for i, pattern_file in enumerate(pattern_files):
-                self.sendCommand(
-                    f"read_patterns {pattern_file} {'-append' if i else ''}"
-                )
-            self._pattern_files = pattern_files
-
     def close(self, force: bool = True):
-        """close tessent shell process"""
-
-        try:  # exit Tessent shell
-            self.sendCommand("exit -force")
-        except (
-            pexpect.exceptions.EOF
-        ):  # pexpect will throw exception, but we want to ignore it
+        """Close the tessent shell process."""
+        try:
+            self.send_command("exit -force")
+        # ignore pexpect exception
+        except pexpect.exceptions.EOF:
             pass
 
         self.process.close(force=force)
 
-        PyTessent._pytessents.remove(self)
+    def __enter__(self) -> "PyTessent":
+        return self
 
-    def __exit__(self):
+    def __exit__(self, *args, **kwargs):
         self.close()

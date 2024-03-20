@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from pytessent import PyTessent
-from pytessent.circuit import Circuit, Pin, Pattern, Gate, CellType, PinPath
+from pytessent.circuit import PinPath
 
 
 def create_pdf_tests(
@@ -9,8 +9,8 @@ def create_pdf_tests(
     pt: PyTessent,
     robust: bool = True,
     hazardfree: bool = False,
-    pdf_file: Path = None,
-    pattern_file: Path = None,
+    pdf_file: Path | None = None,
+    pattern_file: Path | None = None,
 ) -> None:
     """Generate path delay fault tests for a defined set of paths.
 
@@ -29,35 +29,37 @@ def create_pdf_tests(
     pattern_file : Path, optional
         Path to write out pattern file to, by default don't write pattern file.
     """
-    pt.sendCommand("set_pattern_type -sequential 2")
-    pt.sendCommand("set_fault_type path_delay")
+    pt.send_command("set_pattern_type -sequential 2")
+    pt.send_command("set_fault_type path_delay")
 
     if not pdf_file:
         pdf_file = Path("pdf_temp.faults")
 
     with open(pdf_file, "w") as f:
         for pinpath in pinpaths:
-            f.write(pinpath.get_pdf_string)
+            f.write(pinpath.get_pdf_string())
             f.write("\n\n")
 
-    pt.sendCommand(f"read_fault_sites {pdf_file}")
+    pt.send_command(f"read_fault_sites {pdf_file}")
 
     faulttype_cmd = "set_fault_type path_delay -mask_nonobservation_points"
     faulttype_cmd += " -robust_detection_only" if robust and not hazardfree else ""
-    faulttype_cmd += " -robust_detection_only -hazard_free_robust_detections" if hazardfree else ""
-    pt.sendCommand(faulttype_cmd)
+    faulttype_cmd += (
+        " -robust_detection_only -hazard_free_robust_detections" if hazardfree else ""
+    )
+    pt.send_command(faulttype_cmd)
 
-    pt.sendCommand("add_faults -all")
-    pt.sendCommand("create_patterns")
+    pt.send_command("add_faults -all")
+    pt.send_command("create_patterns")
 
     if pattern_file:
-        ext = pattern_file.suffix()
-        pt.sendCommand(f"write_patterns {pattern_file} -{ext} -pattern_sets scan -replace")
+        ext = pattern_file.suffix
+        pt.send_command(
+            f"write_patterns {pattern_file} -{ext} -pattern_sets scan -replace"
+        )
 
 
-def subcircuit_pytessent_from_verilog(
-    verilog: Path, tessent_log: Path
-) -> PyTessent:
+def subcircuit_pytessent_from_verilog(verilog: Path, tessent_log: Path) -> PyTessent:
     """From a subcircuit verilog file, produce a corresponding PyTessent instance.
 
     Parameters
@@ -74,15 +76,15 @@ def subcircuit_pytessent_from_verilog(
     PyTessent
         PyTessent instance with subcircuit loaded.
     """
-    pt = PyTessent.launch(timeout=None, tessent_log=tessent_log, replace=True)
-    pt.sendCommand("set_context pattern -scan")
+    pt = PyTessent(log_file=tessent_log, replace=True)
+    pt.send_command("set_context pattern -scan")
     celllib_dir = Path("/project/voxel_test/tessent_libs/standard_cells/")
 
     for celllib_file in celllib_dir.glob("*lib"):
-        pt.sendCommand(f"read_cell_library {celllib_file}")
+        pt.send_command(f"read_cell_library {celllib_file}")
 
-    pt.sendCommand(f"read_verilog {verilog}")
-    pt.sendCommand("set_design_level top")
-    pt.sendCommand("set_system_mode analysis")
+    pt.send_command(f"read_verilog {verilog}")
+    pt.send_command("set_design_level top")
+    pt.send_command("set_system_mode analysis")
 
     return pt

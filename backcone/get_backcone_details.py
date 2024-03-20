@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import pickle
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import pandas as pd
 import typer
 import yaml
 from pytessent import PyTessent
@@ -17,9 +15,10 @@ class BackconeConfig:
     name: str
     flatmodel: Path
     patdb: Path
-    binpat: Path = None
+    binpat: Path | None = None
     failbits: list[FailBit] = field(default_factory=list)
     defectsites: list[str] = field(default_factory=list)
+
 
 @dataclass
 class FailBit:
@@ -27,11 +26,19 @@ class FailBit:
     cell: int
     failpatterns: list[int] = field(default_factory=list)
 
+
 def read_backcone_yaml(bc_yaml: Path) -> BackconeConfig:
     with open(bc_yaml, "rt") as f:
         bc_fields = yaml.safe_load(f)
 
-    failbits = [FailBit(chain=failbit["chain"], cell=failbit["cell"], failpatterns=failbit["failpatterns"]) for failbit in bc_fields["failbits"]]
+    failbits = [
+        FailBit(
+            chain=failbit["chain"],
+            cell=failbit["cell"],
+            failpatterns=failbit["failpatterns"],
+        )
+        for failbit in bc_fields["failbits"]
+    ]
     bccfg = BackconeConfig(
         name=bc_fields["name"],
         flatmodel=Path(bc_fields["flatmodel"]),
@@ -44,39 +51,32 @@ def read_backcone_yaml(bc_yaml: Path) -> BackconeConfig:
     return bccfg
 
 
-def setup_pytessent(flatmodel: Path, pat_file: Path, logfile: Path = None) -> PyTessent:
-    pt = PyTessent.launch(logfile=logfile, timeout=None, replace=True)
-    pt.sendCommand("set_context pattern -scan")
-    pt.sendCommand(f"read_flat_model {flatmodel}")
-    pt.sendCommand(f"read_patterns {pat_file}")
+def setup_pytessent(
+    flat_model: Path, pat_file: Path, log_file: str | Path | None = None
+) -> PyTessent:
+    pt = PyTessent(log_file=log_file, replace=True)
+    pt.send_command("set_context pattern -scan")
+    pt.send_command(f"read_flat_model {flat_model}")
+    pt.send_command(f"read_patterns {pat_file}")
 
     return pt
 
 
 def get_scancell_pin(chain: str, cell: int, c: Circuit) -> Pin:
-    """From a scan chain name and cell index, get the corresponding scan cell pin (using Tessent report_scan_cells)
+    """From a scan chain name and cell index, get the corresponding scan cell pin (using
+    Tessent report_scan_cells)
 
-    Parameters
-    ----------
-    chain : str
-        Name of scan chain.
-    cell : int
-        Index of scan cell in scan chain.
-    pt : PyTessent
-        PyTessent instance.
+    Arguments:
+        chain: name of scan chain.
+        cell: index of scan cell in scan chain.
+        pt: PyTessent instance.
 
-    Returns
-    -------
-    str
-        Name of scan cell pin
-
-    cell#                                          chain                                            memory_type     inv   gate#                                     shift_clock                                   inv      cell_name                                                                                                                                                                                                 instance_name                                                                                                                                                                                              (ext. pin names)
-    -----  -------------------------------------------------------------------------------------  ---------------  ----  -------  -----------------------------------------------------------------------------------  ----------------  -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------  ----------------
-    130    INT_TRANSITION__fp_mxu_tile_gate1_tessent_edt_fp_mxu_tile_compressor_0_inst__chain_81  MASTER  (FF-LE)  FFFF  3497262  /iL1_tc_clk_CKGTST_PROTOTYPE_tc_clk__LEQ1/ment_ckgtst_hack_inst/GATED_CK_pport  F    F6LLAA_BSDFFW4X2  /CDN_MBIT_mxu_tile_gen_arith_cell_row_7__mxu_cell_inst_gen_dpa_1__float_dpa_result1_reg_fraction__18__MB_mxu_tile_gen_arith_cell_row_7__mxu_cell_inst_gen_dpa_1__float_dpa_result1_reg_fraction__20__MB_mxu_tile_gen_arith_cell_row_7__mxu_cell_inst_gen_dpa_1__float_dpa_result1_reg_fraction__21__MB_mxu_tile_gen_arith_cell_row_7__mxu_cell_inst_gen_dpa_1__float_dpa_result1_reg_sign_  bit0_inst  (ti,-)
+    Returns:
+        name of scan cell pin.
     """
 
     # query tessent for scan cell report
-    scr_str = c.pt.sendCommand(f"report_scan_cell {chain} -range {cell} {cell}")
+    scr_str = c.pt.send_command(f"report_scan_cell {chain} -range {cell} {cell}")
 
     # pull out line with instance
     scr_line = scr_str.split("\n")[-1]
@@ -102,7 +102,7 @@ def get_scancell_pin(chain: str, cell: int, c: Circuit) -> Pin:
 
 def get_backcone_flop_pins(pin: Pin, c: Circuit) -> list[Pin]:
     # use tessent to find flops on backcone
-    res_str = c.pt.sendCommand(
+    res_str = c.pt.send_command(
         "get_attribute_value_list "
         f"[trace_flat_model -from {pin.name} -direction backward -map_tag_to_design_module_boundary on] "
         "-name name"
@@ -149,15 +149,19 @@ def get_backcone_pins(pin: Pin, endpoints: list[Pin]) -> set[Pin]:
     return bc_pins
 
 
-
-
 def main(
-    backconeyaml: Path = typer.Argument(..., help="Input YAML file for backcone processing"),
+    backconeyaml: Path = typer.Argument(
+        ..., help="Input YAML file for backcone processing"
+    ),
     tessent_log: Path = typer.Option(None, help="Tessent log file"),
-    analyze_patterns: bool = typer.Option(True, help="Run analysis on failing patterns?"),
+    analyze_patterns: bool = typer.Option(
+        True, help="Run analysis on failing patterns?"
+    ),
     write_verilog: bool = typer.Option(False, help="Write Verliog file of subcircuit?"),
     write_pickle: bool = typer.Option(False, help="Write Pickle file of subcircuit?"),
-    from_pickle: Path = typer.Option(None, help="Read Backcone from pre-existing Pickle file?"),
+    from_pickle: Path = typer.Option(
+        None, help="Read Backcone from pre-existing Pickle file?"
+    ),
     plot_graph: bool = typer.Option(False, help="Plot graph of subcircuit?"),
 ) -> Circuit:
     bccfg = read_backcone_yaml(backconeyaml)
@@ -170,9 +174,11 @@ def main(
 
     # set up pytessent
     pt = setup_pytessent(
-        flatmodel=bccfg.flatmodel,
-        pat_file=bccfg.binpat if (bccfg.binpat and bccfg.binpat.exists()) else bccfg.patdb,
-        logfile=tessent_log,
+        flat_model=bccfg.flatmodel,
+        pat_file=bccfg.binpat
+        if (bccfg.binpat and bccfg.binpat.exists())
+        else bccfg.patdb,
+        log_file=tessent_log,
     )
 
     if from_pickle:
@@ -198,7 +204,6 @@ def main(
 
             failpatterns = [Pattern(p) for p in failbit.failpatterns]
             if analyze_patterns:
-
                 # cycle through patterns, extract values of each pin in backcone
                 failpaths_per_pattern = {}
                 for failpat in tqdm(failpatterns, desc="Fail Patterns"):
@@ -206,19 +211,31 @@ def main(
                     failpat.get_circuit_values(c)
                     failpat.create_pattern_sim_context(c)
                     for ipin in tqdm(c.inputs, desc="Input X Simulation"):
-                        if failpat.pinvalues[ipin][0] != failpat.pinvalues[ipin][1]:  # transitions
+                        if (
+                            failpat.pinvalues[ipin][0] != failpat.pinvalues[ipin][1]
+                        ):  # transitions
                             x_pins, fail_outputs = failpat.simulate_x_at_pin(c, ipin)
                             if fail_outputs:  # fails for some output
-                                [failpat.add_activated_pinpath(pinpath) for pinpath in c.get_pinpaths(from_pin=ipin, to_pin=sc_pin) if pinpath.is_activated(x_pins)]
+                                [
+                                    failpat.add_activated_pinpath(pinpath)
+                                    for pinpath in c.get_pinpaths(
+                                        from_pin=ipin, to_pin=sc_pin
+                                    )
+                                    if pinpath.is_activated(x_pins)
+                                ]
                     failpaths_per_pattern[failpat] = failpat.activatedpinpaths
 
-                with open(outdir / "failpaths.txt", 'w') as f:
+                with open(outdir / "failpaths.txt", "w") as f:
                     for pat, failpaths in failpaths_per_pattern.items():
                         f.write(f"Pattern {pat.index}\n")
                         for i, failpath in enumerate(failpaths):
                             f.write(f"  Path {failpath.index} ({i+1}):\n")
                             for pin in failpath.pins:
-                                f.write(f"    {pin.name} {pin.gate.celltype.name} ({''.join(pat.pinvalues[pin])}) {'*' if pin in c.defectsites else ''}\n")
+                                f.write(
+                                    f"    {pin.name} {pin.gate.celltype.name} "
+                                    f"({''.join(pat.pinvalues[pin])}) "
+                                    f"{'*' if pin in c.defectsites else ''}\n"
+                                )
                             f.write("\n")
                         f.write("\n")
 
@@ -229,16 +246,9 @@ def main(
         c.to_verilog(outdir / "backcone.v")
 
     if plot_graph:
-        c.plot_graph(outdir / f"backcone.png")
+        c.plot_graph(outdir / "backcone.png")
 
-    # convert Pin objects to pin names
-
-    # convert to tuples, write to CSV file
-    # failpat_tuples = [tuple([p.name] + [pat.pinvalues[p] for pat in failpatterns]) for p in c.pins]
-    # pd.DataFrame(failpat_tuples, columns=["pin"] + bccfg.failpatterns).to_csv(
-    #     "backcone_pin_values.csv"
-    # )
-
+    return c
 
 
 if __name__ == "__main__":

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Literal, TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
-from .gate import Gate
+from pytessent.circuit.gate import Gate
 
 if TYPE_CHECKING:
-    from ..pytessent import PyTessent
+    from pytessent import PyTessent
 
 
 class Pin:
@@ -55,7 +55,9 @@ class Pin:
         """Construct Pin object."""
         self._name: str = name
         self._pt: PyTessent = pt
-        self._direction: str = pt.sendCommand(f"get_single_attribute_value {name} -name direction")
+        self._direction: str = pt.send_command(
+            f"get_single_attribute_value {name} -name direction"
+        )
 
         # leave fanin/fanout blank, will fill when called
         self._fanin: set[Pin] = set()
@@ -93,10 +95,14 @@ class Pin:
     def fanin(self) -> set[Pin]:
         """Get fanin Pin objects from pin."""
         if not self._fanin:
-            self._fanin = set([
-                self.get_pin(p, self.pt)
-                for p in self.pt.sendCommand(f"get_fanin {self.name}")[1:-1].split()
-            ])
+            self._fanin = set(
+                [
+                    self.get_pin(p, self.pt)
+                    for p in self.pt.send_command(f"get_fanin {self.name}")[
+                        1:-1
+                    ].split()
+                ]
+            )
 
         return self._fanin
 
@@ -104,10 +110,14 @@ class Pin:
     def fanout(self) -> set[Pin]:
         """Get fanout Pin objects from pin."""
         if not self._fanout:
-            self._fanout = set([
-                self.get_pin(p, self.pt)
-                for p in self.pt.sendCommand(f"get_fanout {self.name}")[1:-1].split()
-            ])
+            self._fanout = set(
+                [
+                    self.get_pin(p, self.pt)
+                    for p in self.pt.send_command(f"get_fanout {self.name}")[
+                        1:-1
+                    ].split()
+                ]
+            )
 
         return self._fanout
 
@@ -116,7 +126,7 @@ class Pin:
         """Get Gate object that pin is on."""
         return self._gate
 
-    def get_pin_value(self) -> tuple[Literal["0", "1", "X"]]:
+    def get_pin_value(self) -> tuple[Literal["0", "1", "X"], ...]:
         """From a given pin name, find its value for the current gate report.
 
         Returns
@@ -129,14 +139,16 @@ class Pin:
         ValueError
             If pin name could not be found in gate report
         """
-        gate_rpt_str = self._pt.sendCommand(f"report_gate {self.name}")
+        gate_rpt_str = self._pt.send_command(f"report_gate {self.name}")
         pinname = self.name.split("/")[-1]
         gate_rpt_fields = gate_rpt_str.split()
         try:
             value_str = gate_rpt_fields[gate_rpt_fields.index(pinname) + 2]
         except ValueError:
-            raise ValueError(f'Could not find pin {pinname} in gate report "{gate_rpt_str}"')
+            raise ValueError(
+                f'Could not find pin {pinname} in gate report "{gate_rpt_str}"'
+            )
 
-        val_tuple = tuple([v[0] for v in value_str[1:-1].split("-") if v.isnumeric()])
-
-        return val_tuple
+        return tuple(
+            [v[0] for v in value_str[1:-1].split("-") if v.isnumeric()]  # type: ignore
+        )

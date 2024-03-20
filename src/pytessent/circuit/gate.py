@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .celltype import CellType
+from pytessent.circuit.celltype import CellType
 
 if TYPE_CHECKING:
-    from ..pytessent import PyTessent
-    from .pin import Pin
+    from pytessent import PyTessent
+    from pytessent.circuit.pin import Pin
 
 
 class Gate:
@@ -63,7 +63,7 @@ class Gate:
         """Construct Gate object."""
         self._name: str = name
         self._pt: PyTessent = pt
-        self._celltype: CellType = None
+        self._celltype: CellType | None = None
         self._inputs: list[Pin] = []
         self._outputs: list[Pin] = []
 
@@ -78,7 +78,7 @@ class Gate:
         return self.name.replace("/", "__")
 
     @property
-    def pt(self) -> str:
+    def pt(self) -> PyTessent:
         """Get PyTessent instance associated with pin."""
         return self._pt
 

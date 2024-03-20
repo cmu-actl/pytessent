@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-import matplotlib.pyplot as plt
 from pathlib import Path
 import networkx as nx
 import pickle
 
-from ..pytessent import PyTessent
-from .celltype import CellType
-from .gate import Gate
-from .pin import Pin
-from .pinpath import PinPath
-from .pattern import Pattern
+from pytessent import PyTessent
+from pytessent.circuit.celltype import CellType
+from pytessent.circuit.gate import Gate
+from pytessent.circuit.pin import Pin
+from pytessent.circuit.pinpath import PinPath
+from pytessent.circuit.pattern import Pattern
 
 
 class Circuit:
@@ -275,7 +274,9 @@ class Circuit:
 
         return G
 
-    def plot_graph(self, outfile: Path = None, pattern: Pattern = None) -> None:
+    def plot_graph(
+        self, outfile: Path | None = None, pattern: Pattern | None = None
+    ) -> None:
         if not outfile:
             if pattern:
                 outfile = Path(f"{self.name}_pattern{pattern.index}_graph.png")
@@ -312,8 +313,7 @@ class Circuit:
 
         A.draw(outfile, prog="dot", args='-Grankdir="LR" -Efontsize=5')
 
-
-    def to_verilog(self, outfile: Path = None) -> None:
+    def to_verilog(self, outfile: Path | None = None) -> None:
         """From a circuit with a set of defined pins, write out a Verilog netlist.
 
         Parameters
@@ -341,11 +341,11 @@ class Circuit:
 
         # get all nets
         pin2net = {
-            p: self.pt.sendCommand(f"get_fanout {p.name} -stop_on net")[1:-1]
+            p: self.pt.send_command(f"get_fanout {p.name} -stop_on net")[1:-1]
             for p in self.pins
             if p.direction == "output"
         } | {
-            p: self.pt.sendCommand(f"get_fanin {p.name} -stop_on net")[1:-1]
+            p: self.pt.send_command(f"get_fanin {p.name} -stop_on net")[1:-1]
             for p in self.pins
             if p.direction == "input"
         }
@@ -396,7 +396,10 @@ class Circuit:
         return self._pinpaths
 
     def get_pinpaths(
-        self, from_pin: Pin = None, to_pin: Pin = None, through_pins: list[Pin] = None
+        self,
+        from_pin: Pin | None = None,
+        to_pin: Pin | None = None,
+        through_pins: list[Pin] | None = None,
     ) -> list[PinPath]:
         """Get list of paths meeting specified requirements.
 
@@ -440,7 +443,7 @@ class Circuit:
 
         return filter_pinpaths
 
-    def to_pickle(self, outfile: Path, patterns: list[Pattern] = None) -> None:
+    def to_pickle(self, outfile: Path, patterns: list[Pattern] | None = None) -> None:
         """Write out a pickle file for the circuit (for easier reloading).
 
         Has format:
@@ -484,7 +487,9 @@ class Circuit:
         # store pinpaths
         circuit_dict["pinpaths"] = []
         for pinpath in self.pinpaths:
-            circuit_dict["pinpaths"].append([pin_list.index(pin) for pin in pinpath.pins])
+            circuit_dict["pinpaths"].append(
+                [pin_list.index(pin) for pin in pinpath.pins]
+            )
 
         # store patterns
         if patterns:
@@ -505,9 +510,9 @@ class Circuit:
 
     @classmethod
     def from_pickle(
-        cls, infile: Path, pt: PyTessent, name: str = None
+        cls, infile: Path, pt: PyTessent, name: str | None = None
     ) -> tuple[Circuit, list[Pattern]]:
-        """Read in a circuit pickle file and return Circuit and Pattern objects
+        """Read in a circuit pickle file and return Circuit and Pattern objects.
 
         Parameters
         ----------
@@ -526,8 +531,9 @@ class Circuit:
         with open(infile, "rb") as f:
             circuit_dict = pickle.load(f)
 
+        name = name if name else circuit_dict["name"]
         if not name:
-            name = circuit_dict["name"]
+            raise ValueError("Could not get circuit name")
 
         c = Circuit(name, pt)
 

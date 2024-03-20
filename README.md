@@ -1,5 +1,16 @@
 # PyTessent
-This contains a small library enabling creation of `tessent -shell` subprocesses that can receive commands as strings sent from Python and return resulting output strings.
+PyTessent is a small library enabling creation of interactive `tessent -shell` subprocesses that can be controlled from python.
+
+It uses the python [pexpect](https://pexpect.readthedocs.io/en/stable/) library to facilitate communication with the Tessent process.
+
+
+## Installation
+
+```shell
+git clone https://github.com/cmu-actl/pytessent.git
+cd pytessent
+pip install -e .
+```
 
 
 ## Example Usage
@@ -7,35 +18,27 @@ This contains a small library enabling creation of `tessent -shell` subprocesses
 from pytessent import PyTessent
 
 # create "tessent -shell" process and write log file to tessent.log
-pt = PyTessent.launch(timeout=None, logfile="tessent.log")
+pt = PyTessent(log_file="tessent.log")
 
 # send tessent command to set context
-pt.sendCommand("set_context patterns -scan")
+pt.send_command("set_context patterns -scan")
 
 # Read Tessent flat model
 flat_model_path = "/storage/industry_data/globalfoundries/12LP_STS/12LP_STS_Flatmodels/v1.0_12LPQTV_STS_lym0_stuck.flat.gz"
-pt.sendCommand(f"read_flat_model {flat_model_path}")
+pt.send_command(f"read_flat_model {flat_model_path}")
 
 # add faults to design, create patterns
-pt.sendCommand("add_faults -all")
-pt.sendCommand("create_patterns")
+pt.send_command("add_faults -all")
+pt.send_command("create_patterns")
 
 # report coverage stats, store in string (for parsing, etc...)
-stats_str = pt.sendCommand("report_statistics")
+stats_str = pt.send_command("report_statistics")
 
 # close tessent -shell process
 pt.close()
 ```
 
-## Installation
 
+## Compatability
 
-
-
-## Notes
-
-**Requires:**
-- *pexpect* Python Library [https://pexpect.readthedocs.io/en/stable/](https://pexpect.readthedocs.io/en/stable/)
-
-**Assumes:**
-- `SETUP> ` and `ANALYSIS> ` are the two prompts that are expected from Tessent shell subprocess, used by *pexpect* library to determine when command has completed.
+PyTessent should be compatiably with a wide array of Tessent versions. The only assumptions it makes are that `tessent -shell` accepts `-dofile`, `-logfile`, `-replace`, and `-arguments` as arguments, and that the shell itself uses the following two prompts: `SETUP> ` and `ANALYSIS> `.

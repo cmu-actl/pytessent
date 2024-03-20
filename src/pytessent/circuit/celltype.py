@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..pytessent import PyTessent
-    from .gate import Gate
+    from pytessent import PyTessent
+    from pytessent.circuit.gate import Gate
 
 
 class CellType:
@@ -41,7 +41,7 @@ class CellType:
     @classmethod
     def from_gate(cls, gate: Gate) -> CellType:
         """Get CellType object from corresponding Gate object."""
-        celltype_name = gate.pt.sendCommand(
+        celltype_name = gate.pt.send_command(
             f"get_single_attribute_value {gate.name} -name module_name"
         )
         if celltype_name not in cls._celltypes:
@@ -63,7 +63,7 @@ class CellType:
         return self._name
 
     @property
-    def pt(self) -> str:
+    def pt(self) -> PyTessent:
         """Get PyTessent instance associated with celltype."""
         return self._pt
 
@@ -71,7 +71,7 @@ class CellType:
     def inputs(self) -> list[str]:
         """Get list of input ports."""
         if not self._inputs:
-            self._inputs = self._pt.sendCommand(
+            self._inputs = self._pt.send_command(
                 f"get_ports -of_module {self.name} -direction input"
             )[1:-1].split()
         return self._inputs
@@ -80,7 +80,7 @@ class CellType:
     def outputs(self) -> list[str]:
         """Get list of output ports."""
         if not self._outputs:
-            self._outputs = self._pt.sendCommand(
+            self._outputs = self._pt.send_command(
                 f"get_ports -of_module {self.name} -direction output"
             )[1:-1].split()
         return self._outputs
