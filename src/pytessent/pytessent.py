@@ -24,6 +24,8 @@ class PyTessent:
         self._tessentpath = tessentpath
         self._expectlist = expectlist
         self._timeout = timeout
+        self._flat_model: Path | None = None
+        self._pattern_files: list[Path] = []
 
     @property
     def process(self) -> pexpect.pty_spawn.spawn:
@@ -48,6 +50,14 @@ class PyTessent:
     @timeout.setter
     def timeout(self, timeout: int | None) -> None:
         self._timeout = timeout
+
+    @property
+    def flat_model(self) -> Path | None:
+        return self._flat_model
+
+    @property
+    def pattern_files(self) -> list[Path]:
+        return self._pattern_files
 
     @classmethod
     def launch(
@@ -143,6 +153,23 @@ class PyTessent:
             str: resulting message printed to shell after running command
         """
 
+        if "read_flat_model" in command:
+            print(
+                (
+                    "WARNING: Use dedicated PyTessent read_flat_model method to maintain flat_model "
+                    "attribute state"
+                )
+            )
+
+        if "read_pattern" in command:
+            print(
+                (
+                    "WARNING: Use dedicated PyTessent read_pattern_file method to maintain pattern_file "
+                    "attribute state"
+                )
+            )
+            self.pattern_files = []
+
         self.process.sendline(command)
         self.process.expect(
             self.expectlist, timeout=timeout if timeout else self.timeout
@@ -158,6 +185,22 @@ class PyTessent:
             raise Exception(f"Command not found in result '{result}'")
 
         return result.split(f"{command}\n", 1)[1].rstrip()
+
+    def read_flat_model(self, flat_model: Path | str) -> None:
+        flat_model = Path(flat_model)
+        if (not self.flat_model) or (self.flat_model != flat_model):
+            self.sendCommand(f"read_flat_model {flat_model}")
+            self._flat_model = flat_model
+
+    def read_pattern_files(self, pattern_files: list[Path]) -> None:
+        pattern_files = [Path(p) for p in pattern_files]
+        if (not self.pattern_files) or (self.pattern_files != pattern_files):
+            self.sendCommand("delete_patterns")
+            for i, pattern_file in enumerate(pattern_files):
+                self.sendCommand(
+                    f"read_patterns {pattern_file} {'-append' if i else ''}"
+                )
+            self._pattern_files = pattern_files
 
     def close(self, force: bool = True):
         """close tessent shell process"""

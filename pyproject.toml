@@ -1,6 +1,6 @@
 [project]
 name = "pytessent"
-version = "0.3.0"
+version = "0.4.0"
 authors = [
     { name = "Ruben Purdy", email = "rpurdy@andrew.cmu.edu" },
     { name = "Chris Nigh", email = "christon@andrew.cmu.edu" },
