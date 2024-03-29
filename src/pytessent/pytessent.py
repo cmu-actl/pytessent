@@ -69,7 +69,7 @@ class PyTessent:
         else:
             self._expect_patterns = expect_patterns
 
-        launch_command_parts = [tessent_exe, "-shell"]
+        launch_command_parts = [self._tessent_exe, "-shell"]
         if do_file:
             launch_command_parts.append(f"-dofile {do_file}")
         if log_file:
