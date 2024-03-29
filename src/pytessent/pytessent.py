@@ -11,6 +11,25 @@ class TessentCommandError(Exception):
     pass
 
 
+def get_tessent_exe(specified_exe: str | Path | None = None) -> str:
+    """Get the path to the Tessent executable to use.
+
+    If `specified_exe` is not `None`, it will be used. Otherwise, the exe will be
+    queried using `which`. In either case, if the exe does not exist, a
+    `FileNotFoundError` will be raised.
+    """
+    if not specified_exe:
+        # Check for tessent exe on $PATH
+        if not which("tessent"):
+            raise FileNotFoundError("Could not find 'tessent' executable in path")
+        return "tessent"
+    elif str(specified_exe) != "tessent" and not Path(specified_exe).exists():
+        raise FileNotFoundError(
+            f"Could not find Tessent executable at '{specified_exe}'"
+        )
+    return str(specified_exe)
+
+
 class PyTessent:
     """Class for interacting with a Tessent shell process."""
 
@@ -43,17 +62,7 @@ class PyTessent:
                 input. If `None`, checks for "SETUP> " and "ANALYSIS> ".
         """
         self.timeout = timeout
-
-        if not tessent_exe:
-            # Check for tessent exe on $PATH
-            if not which("tessent"):
-                raise FileNotFoundError("Could not find 'tessent' executable in path")
-            tessent_exe = "tessent"
-        elif str(tessent_exe) != "tessent" and not Path(tessent_exe).exists():
-            raise FileNotFoundError(
-                f"Could not find Tessent executable at '{tessent_exe}'"
-            )
-        self._tessent_exe = str(tessent_exe)
+        self._tessent_exe = get_tessent_exe(specified_exe=tessent_exe)
 
         if not expect_patterns:
             self._expect_patterns = self._default_expect_patterns
