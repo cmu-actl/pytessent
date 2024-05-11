@@ -186,6 +186,7 @@ def main(
     else:
         c = Circuit.empty(bccfg.name, pt)
 
+        failpatterns = []
         for failbit in bccfg.failbits:
             # get scancell pin, define as output to circuit
             sc_pin = get_scancell_pin(failbit.chain, failbit.cell, c)

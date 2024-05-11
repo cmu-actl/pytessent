@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import re
+import weakref
 from pathlib import Path
 from shutil import which
+from typing import Awaitable, Literal, overload
 
-import pexpect  # type: ignore
+import pexpect
+
+_TESSENT_ENCODING = "utf-8"
 
 
 class TessentCommandError(Exception):
@@ -69,7 +73,7 @@ class PyTessent:
         else:
             self._expect_patterns = expect_patterns
 
-        launch_command_parts = [self._tessent_exe, "-shell"]
+        launch_command_parts = [self.tessent_exe, "-shell"]
         if do_file:
             launch_command_parts.append(f"-dofile {do_file}")
         if log_file:
@@ -80,12 +84,14 @@ class PyTessent:
             launch_command_parts.append("-arguments")
             for k, v in arguments.items():
                 launch_command_parts.append(f"{k}={v}")
+        launch_command = " ".join(launch_command_parts)
 
-        self._process = pexpect.spawn(" ".join(launch_command_parts))
-        self._process.expect(self._expect_patterns, timeout=self.timeout)  # type: ignore
+        self._process = pexpect.spawn(launch_command)
+        self._finalizer = weakref.finalize(self, self._close_process)
+        self._expect()
 
     @property
-    def process(self) -> pexpect.pty_spawn.spawn:
+    def process(self) -> pexpect.pty_spawn.spawn[bytes]:
         """The Tessent process."""
         return self._process
 
@@ -98,6 +104,42 @@ class PyTessent:
     def expect_patterns(self) -> list[str]:
         """Patterns expected from the Tessent shell."""
         return self._expect_patterns
+
+    @overload
+    def _expect(
+        self, timeout: int | None = None, *, async_: Literal[False] = False
+    ) -> int:
+        ...
+
+    @overload
+    def _expect(
+        self, timeout: int | None = None, *, async_: Literal[True]
+    ) -> Awaitable[int]:
+        ...
+
+    def _expect(
+        self, timeout: int | None = None, *, async_: bool = False
+    ) -> int | Awaitable[int]:
+        return self._process.expect(
+            self._expect_patterns,  # type: ignore
+            timeout=timeout if timeout is not None else self.timeout,
+            async_=async_,  # type: ignore
+        )
+
+    def _clean_result(self, command: str, result: bytes | None) -> str:
+        if result is None:
+            raise TessentCommandError(f"No output returned from command '{command}'")
+        result_str = result.decode(_TESSENT_ENCODING)
+        # remove \r (leave \n)
+        result_str = result_str.replace("\r", "")
+        # remove weird backspace characters
+        result_str = re.sub(r".\x08", "", result_str)
+        # remove echoed command
+        if command not in result_str:
+            raise TessentCommandError(
+                f"Command '{command}' not found in result '{result_str}'"
+            )
+        return result_str.split(f"{command}\n", 1)[1].rstrip()
 
     def send_command(self, command: str, timeout: int | None = None) -> str:
         """Send a command to tessent and get back the resulting message.
@@ -113,31 +155,33 @@ class PyTessent:
             resulting message printed to shell after running command.
         """
         self.process.sendline(command)
-        self.process.expect(
-            self.expect_patterns,  # type: ignore
-            timeout=timeout if timeout else self.timeout,
-        )
+        self._expect(timeout)
+        return self._clean_result(command, self.process.before)
 
-        # remove \r (leave \n)
-        result = self.process.before.decode("utf-8").replace("\r", "")  # type: ignore
-        # remove weird backspace characters
-        result = re.sub(r".\x08", "", result)
+    async def send_command_async(self, command: str, timeout: int | None = None):
+        self.process.sendline(command)
+        await self._expect(timeout, async_=True)
+        return self._clean_result(command, self.process.before)
 
-        # remove echoed command
-        if command not in result:
-            raise TessentCommandError(f"Command not found in result '{result}'")
+    def _close_process(self) -> None:
+        """Close the open tessent shell process.
 
-        return result.split(f"{command}\n", 1)[1].rstrip()
-
-    def close(self, force: bool = True):
-        """Close the tessent shell process."""
+        Should only be used by `weakref.finalize` in the intializer.
+        """
         try:
             self.send_command("exit -force")
         # ignore pexpect exception
         except pexpect.exceptions.EOF:
             pass
+        self.process.close(force=True)
 
-        self.process.close(force=force)
+    def close(self) -> None:
+        """Close the tessent shell process."""
+        self._finalizer()
+
+    @property
+    def closed(self):
+        return not self._finalizer.alive
 
     def __enter__(self) -> "PyTessent":
         return self

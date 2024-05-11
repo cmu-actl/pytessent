@@ -17,11 +17,12 @@ repos:
       args: [ --fix ]
     - id: ruff-format
   - repo: https://github.com/RobertCraigie/pyright-python
-    rev: v1.1.355
+    rev: v1.1.362
     hooks:
     - id: pyright
       exclude: 'backcone/.*'
       additional_dependencies:
+        - "pytest"
         - "networkx"
         - "pexpect>=4.8.0"
         - "tqdm"
