@@ -8,6 +8,7 @@ from pytessent import PyTessent
 from pytessent.circuit.celltype import CellType
 from pytessent.circuit.gate import Gate
 from pytessent.circuit.pin import Pin
+# from pytessent.circuit.utils import verilog_name
 from pytessent.circuit.pinpath import PinPath
 from pytessent.circuit.pattern import Pattern
 
@@ -107,6 +108,11 @@ class Circuit:
         return set(self._pins.values())
 
     @property
+    def pin_names(self) -> set[str]:
+        """Get list of names of pins present in circuit."""
+        return set(self._pins.keys())
+
+    @property
     def gates(self) -> set[Gate]:
         """Get list of Gate objects present in circuit."""
         return set(self._gates.values())
@@ -149,19 +155,25 @@ class Circuit:
         """Add a pre-existing Pin object to the circuit."""
         if pin not in self.pins:
             self._pins[pin.name] = pin
-            if update:  # add gate and celltype
-                pin_gate = pin.gate
-                self._gates[pin_gate.name] = pin_gate
-                self._celltypes[pin_gate.celltype.name] = pin_gate.celltype
+            try:
+                if update:  # add gate and celltype
+                    pin_gate = pin.gate
+                    self._gates[pin_gate.name] = pin_gate
+                    self._celltypes[pin_gate.celltype.name] = pin_gate.celltype
+            except AttributeError:  # pin is not connected to a gate (e.g. IO pin)
+                pass
 
     def get_pin(self, name: str, update: bool = True) -> Pin:
         """Get Pin object from name of pin, add to circuit pins if new."""
         if name not in self._pins:
             self._pins[name] = Pin.get_pin(name, self.pt)
-            if update:  # add gate and celltype
-                pin_gate = self._pins[name].gate
-                self._gates[pin_gate.name] = pin_gate
-                self._celltypes[pin_gate.celltype.name] = pin_gate.celltype
+            try:
+                if update:  # add gate and celltype
+                    pin_gate = self._pins[name].gate
+                    self._gates[pin_gate.name] = pin_gate
+                    self._celltypes[pin_gate.celltype.name] = pin_gate.celltype
+            except AttributeError:  # pin is not connected to a gate (e.g. IO pin)
+                pass
         return self._pins[name]
 
     def get_gate(self, name: str, update: bool = True) -> Gate:
@@ -328,39 +340,35 @@ class Circuit:
 
         # define module line
         verilog_lines.append(
-            f"module {self.name}({', '.join([p.vname for p in list(self.inputs) + list(self.outputs)])});"
+            f"module {self.name}( {' , '.join([p.vname for p in list(self.inputs) + list(self.outputs)])} );"
         )
 
         # define inputs and outputs
         for opin in self.outputs:
-            verilog_lines.append(f"  output {opin.vname};")
+            verilog_lines.append(f"  output {opin.vname} ;")
         for ipin in self.inputs:
-            verilog_lines.append(f"  input {ipin.vname};")
+            verilog_lines.append(f"  input {ipin.vname} ;")
 
         verilog_lines.append("")
 
         # get all nets
         pin2net = {
-            p: self.pt.send_command(f"get_fanout {p.name} -stop_on net")[1:-1]
+            p: p.net
             for p in self.pins
-            if p.direction == "output"
-        } | {
-            p: self.pt.send_command(f"get_fanin {p.name} -stop_on net")[1:-1]
-            for p in self.pins
-            if p.direction == "input"
         }
 
         nets = set(pin2net.values())
         for net in nets:
-            verilog_lines.append(f"  wire {net};")
+            print(net)
+            verilog_lines.append(f"  wire {net} ;")
 
         verilog_lines.append("")
 
         # connect subcircuit inputs and outputs to nets
         for opin in self.outputs:
-            verilog_lines.append(f"  assign {opin.vname} = {pin2net[opin]};")
+            verilog_lines.append(f"  assign {opin.vname} = {pin2net[opin]} ;")
         for ipin in self.inputs:
-            verilog_lines.append(f"  assign {pin2net[ipin]} = {ipin.vname};")
+            verilog_lines.append(f"  assign {pin2net[ipin]} = {ipin.vname} ;")
 
         verilog_lines.append("")
 
@@ -369,9 +377,9 @@ class Circuit:
             if (self.inputs & set(gate.outputs)) or (self.outputs & set(gate.inputs)):
                 continue
             pinstr = ", ".join(
-                [f".{p.leaf} ({pin2net[p]})" for p in gate.inputs + gate.outputs]
+                [f".{p.leaf} ( {pin2net[p]} )" for p in gate.inputs + gate.outputs]
             )
-            verilog_lines.append(f"  {gate.celltype.name} {gate.vname} ({pinstr});")
+            verilog_lines.append(f"  {gate.celltype.name} {gate.vname} ( {pinstr} );")
 
         verilog_lines.append("")
 
@@ -381,7 +389,7 @@ class Circuit:
 
     def _get_all_pinpaths(self) -> list[PinPath]:
         """From Circuit pin graph, get all paths from inputs to outputs."""
-        all_pinpaths = []
+        all_pinpaths: list[PinPath] = []
         for ipin in self.inputs:
             for opin in self.outputs:
                 for path in nx.all_simple_paths(self.pin_graph, ipin, opin):
