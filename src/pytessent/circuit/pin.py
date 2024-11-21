@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import TYPE_CHECKING, Literal
 
 from pytessent.circuit.gate import Gate
-from pytessent.circuit.utils import parse_name, parse_name_list, CircuitElementNotFoundException, verilog_name
+from pytessent.circuit.utils import (
+    parse_name_list,
+    CircuitElementNotFoundException,
+    verilog_name,
+)
 
 if TYPE_CHECKING:
     from pytessent import PyTessent
@@ -48,7 +52,7 @@ class Pin(ABC):
     def get_pin(cls, name: str, pt: PyTessent) -> Pin:
         """Get pin object from name of pin."""
         if name not in cls._pins:  # get pin if it has already been created
-            if cls.verify_pin(name, pt): # otherwise, create
+            if cls.verify_pin(name, pt):  # otherwise, create
                 cls._pins[name] = GatePin(name, pt)
             elif cls.verify_primarypin(name, pt):
                 pin_direction = cls.pin_direction(name, pt)
@@ -57,14 +61,18 @@ class Pin(ABC):
                 elif pin_direction == "output":
                     cls._pins[name] = PrimaryOutput(name, pt)
             else:
-                raise CircuitElementNotFoundException(f"Pin {name} not found in design.")
+                raise CircuitElementNotFoundException(
+                    f"Pin {name} not found in design."
+                )
 
         return cls._pins[name]
 
     @staticmethod
     def pin_direction(name: str, pt: PyTessent) -> str:
         """Get direction of pin."""
-        pin_direction = pt.send_command(f"get_single_attribute_value {name} -name direction")
+        pin_direction = pt.send_command(
+            f"get_single_attribute_value {name} -name direction"
+        )
         if pin_direction not in ["input", "output"]:
             raise ValueError(f"Unknown pin direction: {pin_direction}")
         return pin_direction
@@ -124,16 +132,15 @@ class Pin(ABC):
     def fanin(self) -> set[Pin]:
         """Get fanin Pin objects from pin."""
         if not self._fanin:
-            name_list_str = self.pt.send_command(f"get_name_list [get_fanin {self.name}]")
-            fanin_pins = parse_name_list(name_list_str)
-            self._fanin = set(
-                [
-                    self.get_pin(p, self.pt)
-                    for p in fanin_pins
-                ]
+            name_list_str = self.pt.send_command(
+                f"get_name_list [get_fanin {self.name}]"
             )
+            fanin_pins = parse_name_list(name_list_str)
+            self._fanin = set([self.get_pin(p, self.pt) for p in fanin_pins])
             if self.direction == "input" and len(self.fanin) > 1:
-                raise ValueError(f"Input pin {self.name} has multiple fanin pins: {self.fanin}")
+                raise ValueError(
+                    f"Input pin {self.name} has multiple fanin pins: {self.fanin}"
+                )
 
         return self._fanin
 
@@ -141,13 +148,18 @@ class Pin(ABC):
     def fanout(self) -> set[Pin]:
         """Get fanout Pin objects from pin."""
         if not self._fanout:
-            name_list_str = self.pt.send_command(f"get_name_list [get_fanout {self.name}]")
+            name_list_str = self.pt.send_command(
+                f"get_name_list [get_fanout {self.name}]"
+            )
             fanout_pins = parse_name_list(name_list_str)
             self._fanout = set(
                 [
                     self.get_pin(p, self.pt)
                     for p in fanout_pins
-                    if not self.pt.send_command(f"get_attribute_value_list {p} -name object_type") == "net"
+                    if not self.pt.send_command(
+                        f"get_attribute_value_list {p} -name object_type"
+                    )
+                    == "net"
                 ]
             )
 

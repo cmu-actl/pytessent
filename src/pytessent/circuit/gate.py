@@ -60,7 +60,7 @@ class Gate:
     @staticmethod
     def verify_gate(gate: str, pt: PyTessent) -> bool:
         """Verify that gate exists in the design."""
-        return ("Error" not in pt.send_command(f"get_instance {gate}"))
+        return "Error" not in pt.send_command(f"get_instance {gate}")
 
     def __repr__(self) -> str:
         return f"Gate({self.name})"

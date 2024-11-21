@@ -87,6 +87,9 @@ class PyTessent:
         launch_command = " ".join(launch_command_parts)
 
         self._process = pexpect.spawn(launch_command)
+        self._cpl = self._process.compile_pattern_list(
+            self._expect_patterns  # type: ignore
+        )
         self._finalizer = weakref.finalize(self, self._close_process)
         self._expect()
 
@@ -108,20 +111,18 @@ class PyTessent:
     @overload
     def _expect(
         self, timeout: int | None = None, *, async_: Literal[False] = False
-    ) -> int:
-        ...
+    ) -> int: ...
 
     @overload
     def _expect(
         self, timeout: int | None = None, *, async_: Literal[True]
-    ) -> Awaitable[int]:
-        ...
+    ) -> Awaitable[int]: ...
 
     def _expect(
         self, timeout: int | None = None, *, async_: bool = False
     ) -> int | Awaitable[int]:
-        return self._process.expect(
-            self._expect_patterns,  # type: ignore
+        return self._process.expect_list(
+            self._cpl,
             timeout=timeout if timeout is not None else self.timeout,
             async_=async_,  # type: ignore
         )

@@ -8,6 +8,7 @@ from pytessent import PyTessent
 from pytessent.circuit.celltype import CellType
 from pytessent.circuit.gate import Gate
 from pytessent.circuit.pin import Pin
+
 # from pytessent.circuit.utils import verilog_name
 from pytessent.circuit.pinpath import PinPath
 from pytessent.circuit.pattern import Pattern
@@ -352,10 +353,7 @@ class Circuit:
         verilog_lines.append("")
 
         # get all nets
-        pin2net = {
-            p: p.net
-            for p in self.pins
-        }
+        pin2net = {p: p.net for p in self.pins}
 
         nets = set(pin2net.values())
         for net in nets:
